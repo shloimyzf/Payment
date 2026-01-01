@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mitch's Admin</title>
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#E2CB9F">
+    <link rel="apple-touch-icon" href="icon.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; background-color: #E2CB9F; }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .modal-enter { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* Custom Scrollbar */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Desktop Grid Override: Forces visibility on large screens regardless of JS tab state */
+        @media (min-width: 768px) {
+            #col-debts, #col-manual { display: block !important; }
+            .mobile-only-nav { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-[#E2CB9F] text-[#432818] pb-32 select-none min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-[#E2CB9F]/90 backdrop-blur-md border-b border-[#432818]/10 sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-[#432818] rounded-xl flex items-center justify-center text-[#E2CB9F]">
+                <i data-lucide="shield-check" class="w-6 h-6"></i>
+            </div>
+            <h1 class="text-2xl font-black italic text-[#432818] tracking-tighter">Admin</h1>
+        </div>
+        <div class="text-[10px] font-black uppercase tracking-widest opacity-50 bg-[#432818]/10 px-2 py-1 rounded">Mitch's Coffee</div>
+    </header>
+
+    <!-- Mobile Navigation Tabs (Hidden on Desktop via CSS) -->
+    <div class="px-4 mt-4 sticky top-20 z-40 bg-[#E2CB9F] pb-2 mobile-only-nav">
+        <div class="flex bg-[#432818]/10 p-1 rounded-2xl border border-[#432818]/5">
+            <button onclick="switchTab('debts')" id="tab-debts" class="flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all bg-[#E2CB9F] text-[#432818] shadow-md">Debts</button>
+            <button onclick="switchTab('add')" id="tab-add" class="flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all opacity-50 hover:bg-[#E2CB9F]/50">Manual</button>
+            <button onclick="switchTab('menu')" id="tab-menu" class="flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all opacity-50 hover:bg-[#E2CB9F]/50">Menu</button>
+        </div>
+    </div>
+
+    <!-- MAIN LAYOUT: Grid on Tablet+ -->
+    <main class="max-w-6xl mx-auto p-4 pt-0 w-full flex-1 md:grid md:grid-cols-2 md:gap-8 md:pt-6">
+
+        <!-- LEFT COLUMN: DEBTS LIST -->
+        <div id="col-debts" class="view-section animate-in w-full">
+            <!-- Search Bar -->
+            <div class="sticky top-36 md:top-24 z-30 bg-[#E2CB9F] pb-4 pt-2">
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-4 top-3.5 w-5 h-5 opacity-40 text-[#432818]"></i>
+                    <input type="text" id="searchInput" onkeyup="filterUsers()" placeholder="Search names..." class="w-full bg-white/60 border-2 border-transparent focus:border-[#432818]/10 rounded-2xl pl-12 pr-4 py-3 font-bold text-[#432818] outline-none focus:bg-white transition-all shadow-sm placeholder-[#432818]/40">
+                </div>
+            </div>
+
+            <div id="loading" class="text-center py-10 opacity-50 font-bold animate-pulse">Fetching Ledger...</div>
+            <div id="usersList" class="grid grid-cols-2 gap-3 lg:grid-cols-2 xl:grid-cols-3"></div>
+        </div>
+
+        <!-- RIGHT COLUMN: MANUAL ENTRY / MENU -->
+        <!-- On mobile, this is toggled. On Desktop, it's always visible -->
+        <div id="col-manual" class="view-section hidden animate-in md:block w-full">
+            
+            <!-- Desktop-Only Sub-Tabs for Right Column -->
+            <div class="hidden md:flex bg-[#432818]/10 p-1 rounded-2xl border border-[#432818]/5 mb-4 sticky top-24 z-20">
+                <button onclick="switchDesktopRight('add')" id="d-tab-add" class="flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all bg-[#E2CB9F] text-[#432818] shadow-md">New Order</button>
+                <button onclick="switchDesktopRight('menu')" id="d-tab-menu" class="flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all opacity-50 hover:bg-[#E2CB9F]/50">Menu Config</button>
+            </div>
+
+            <div class="space-y-4 md:sticky md:top-40">
+                
+                <!-- MANUAL FORM SECTION -->
+                <div id="section-manual-form" class="bg-white p-6 rounded-[2.5rem] shadow-xl border border-[#432818]/10 space-y-4">
+                    <h2 class="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-5 h-5"></i> Manual Order
+                    </h2>
+                    
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black uppercase opacity-50 ml-2">Customer Name</label>
+                        <input type="text" id="manualName" placeholder="e.g. Jack" class="w-full bg-[#E2CB9F]/20 border-2 border-[#432818]/10 rounded-2xl px-4 py-3 text-[#432818] font-bold placeholder-[#432818]/30 outline-none focus:border-[#432818]/50 transition-all">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black uppercase opacity-50 ml-2">Item</label>
+                        <select id="manualItem" onchange="updatePricePreview('manualItem', 'manualPrice', 'manualSizeOptions')" class="w-full bg-[#E2CB9F]/20 border-2 border-[#432818]/10 rounded-2xl px-4 py-3 text-[#432818] font-bold outline-none focus:border-[#432818]/50 transition-all appearance-none">
+                            <option value="">-- Choose Item --</option>
+                        </select>
+                    </div>
+
+                    <div id="manualSizeOptions" class="hidden space-y-1">
+                        <label class="text-[10px] font-black uppercase opacity-50 ml-2">Size</label>
+                        <div class="flex bg-[#E2CB9F]/20 p-1 rounded-2xl">
+                            <button onclick="setSize('Large', 'manualSize', 'btn-large', 'btn-small')" id="btn-large" class="flex-1 py-2 rounded-xl text-xs font-black bg-[#432818] text-[#E2CB9F] shadow-sm transition-all">Large</button>
+                            <button onclick="setSize('Small', 'manualSize', 'btn-large', 'btn-small')" id="btn-small" class="flex-1 py-2 rounded-xl text-xs font-black opacity-50 transition-all">Small</button>
+                        </div>
+                        <input type="hidden" id="manualSize" value="Large">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black uppercase opacity-50 ml-2">Price ($)</label>
+                        <input type="number" id="manualPrice" step="0.50" class="w-full bg-[#E2CB9F]/20 border-2 border-[#432818]/10 rounded-2xl px-4 py-3 text-[#432818] font-bold placeholder-[#432818]/30 outline-none focus:border-[#432818]/50 transition-all">
+                    </div>
+
+                    <button onclick="submitManualOrder()" class="w-full bg-[#432818] text-[#E2CB9F] py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform uppercase tracking-wide mt-2">
+                        Add to Ledger
+                    </button>
+                </div>
+
+                <!-- MENU CONFIG SECTION (Hidden by default on Desktop, shown via sub-tab) -->
+                <div id="section-menu-config" class="bg-[#432818] text-[#E2CB9F] p-6 rounded-[2.5rem] shadow-xl space-y-4 hidden">
+                    <h2 class="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
+                        <i data-lucide="coffee" class="w-5 h-5"></i> Menu Config
+                    </h2>
+                    <div id="menuReference" class="space-y-3 text-sm font-bold opacity-90"></div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL: QUICK ADD -->
+    <div id="quickAddModal" class="fixed inset-0 z-50 pointer-events-none flex items-end sm:items-center justify-center hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onclick="closeQuickAdd()"></div>
+        <div class="bg-white w-full max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 relative z-10 shadow-2xl space-y-4 pb-10 pointer-events-auto modal-enter">
+            <div class="flex justify-between items-center">
+                <h3 class="text-2xl font-black text-[#432818]">Quick Add</h3>
+                <button onclick="closeQuickAdd()" class="bg-gray-100 p-2 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <p class="text-sm font-bold opacity-50">Adding for: <span id="quickAddName" class="text-[#432818] font-black uppercase"></span></p>
+
+            <select id="quickItem" onchange="updatePricePreview('quickItem', 'quickPrice', 'quickSizeOptions')" class="w-full bg-[#E2CB9F]/20 border-2 border-[#432818]/10 rounded-2xl px-4 py-3 text-[#432818] font-bold outline-none appearance-none">
+                <option value="">-- Choose Item --</option>
+            </select>
+
+            <div id="quickSizeOptions" class="hidden space-y-1">
+                <div class="flex bg-[#E2CB9F]/20 p-1 rounded-2xl">
+                    <button onclick="setSize('Large', 'quickSize', 'q-btn-large', 'q-btn-small')" id="q-btn-large" class="flex-1 py-2 rounded-xl text-xs font-black bg-[#432818] text-[#E2CB9F] shadow-sm transition-all">Large</button>
+                    <button onclick="setSize('Small', 'quickSize', 'q-btn-large', 'q-btn-small')" id="q-btn-small" class="flex-1 py-2 rounded-xl text-xs font-black opacity-50 transition-all">Small</button>
+                </div>
+            </div>
+            <input type="hidden" id="quickSize" value="Large">
+            <input type="number" id="quickPrice" class="w-full bg-[#E2CB9F]/20 border-2 border-[#432818]/10 rounded-2xl px-4 py-3 text-[#432818] font-bold" placeholder="Price">
+
+            <button onclick="submitQuickAdd()" class="w-full bg-[#432818] text-[#E2CB9F] py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform uppercase">Add Now</button>
+        </div>
+    </div>
+
+    <!-- MODAL: USER DETAILS -->
+    <div id="userDetailsModal" class="fixed inset-0 z-50 pointer-events-none flex items-end sm:items-center justify-center hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onclick="closeUserDetails()"></div>
+        <div class="bg-[#E2CB9F] w-full max-w-sm rounded-t-[2rem] sm:rounded-[2rem] relative z-10 shadow-2xl pointer-events-auto modal-enter flex flex-col max-h-[85vh]">
+            
+            <div class="p-6 border-b border-[#432818]/10 bg-[#E2CB9F] rounded-t-[2rem]">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 id="detailName" class="text-3xl font-black text-[#432818] leading-none">Name</h3>
+                        <p id="detailTotal" class="text-lg font-bold opacity-60 mt-1">$0.00 Due</p>
+                    </div>
+                    <button onclick="closeUserDetails()" class="bg-[#432818]/10 p-2 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
+                </div>
+            </div>
+
+            <div class="p-4 overflow-y-auto flex-1 space-y-2" id="detailList">
+                <!-- Transactions go here -->
+            </div>
+            
+            <div class="p-6 border-t border-[#432818]/10 bg-[#E2CB9F] pb-10">
+                <button onclick="openQuickAddFromDetails()" class="w-full bg-[#432818] text-[#E2CB9F] py-4 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-transform">Add Item</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCMcxuH-8Pc0t8eC71xOU8TXLu0ZoF-RG4",
+            authDomain: "mitches-coffee.firebaseapp.com",
+            projectId: "mitches-coffee",
+            storageBucket: "mitches-coffee.firebasestorage.app",
+            messagingSenderId: "789709713646",
+            appId: "1:789709713646:web:3f09ce026b40a85b3f03ff"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const appId = "mitchs-coffee";
+
+        const MENU_ITEMS = [
+            { id: 'hot-latte', name: 'Regular Hot Latte', type: 'drink' },
+            { id: 'iced-latte', name: 'Regular Iced Latte', type: 'drink' },
+            { id: 'vanilla-hot-latte', name: 'Vanilla Hot Latte', type: 'drink' },
+            { id: 'vanilla-iced-latte', name: 'Vanilla Iced Latte', type: 'drink' },
+            { id: 'brown-sugar-hot', name: 'Brown Sugar Hot Latte', type: 'drink' },
+            { id: 'brown-sugar-iced', name: 'Brown Sugar Iced Latte', type: 'drink' },
+            { id: 'hot-cocoa', name: 'Regular Hot Cocoa', type: 'drink' },
+            { id: 'cookie', name: 'Regular Cookie', type: 'cookie' },
+            { id: 'choc-chip', name: 'Jumbo Cookie', type: 'cookie' },
+        ];
+
+        let currentUserData = {}; 
+        let currentDetailUserKey = null; 
+        let pendingDeletes = {}; // Store timeout IDs
+
+        const getPrice = (itemId, size) => {
+            if (itemId === 'hot-cocoa') return size === 'Small' ? 3.50 : 4.00;
+            if (itemId === 'cookie') return 1.00;
+            if (itemId === 'choc-chip') return 2.00;
+            return size === 'Small' ? 4.00 : 5.00;
+        }
+
+        function init() {
+            populateMenuDropdowns();
+            startOrderListener();
+            lucide.createIcons();
+        }
+
+        // --- MOBILE / DESKTOP TAB SWITCHING ---
+        window.switchTab = (tab) => {
+            // Mobile: Toggles full columns
+            if (tab === 'debts') {
+                document.getElementById('col-debts').classList.remove('hidden');
+                document.getElementById('col-manual').classList.add('hidden');
+                
+                document.getElementById('tab-debts').classList.replace('opacity-50', 'bg-[#E2CB9F]');
+                document.getElementById('tab-debts').classList.replace('hover:bg-[#E2CB9F]/50', 'shadow-md');
+                document.getElementById('tab-add').classList.add('opacity-50');
+                document.getElementById('tab-menu').classList.add('opacity-50');
+            } else {
+                document.getElementById('col-debts').classList.add('hidden');
+                document.getElementById('col-manual').classList.remove('hidden');
+                
+                // If switching to manual/menu, default to that inner section
+                if (tab === 'add') switchDesktopRight('add');
+                if (tab === 'menu') switchDesktopRight('menu');
+
+                document.getElementById('tab-debts').classList.add('opacity-50');
+                document.getElementById('tab-add').classList.toggle('opacity-50', tab !== 'add');
+                document.getElementById('tab-menu').classList.toggle('opacity-50', tab !== 'menu');
+            }
+        };
+
+        window.switchDesktopRight = (tab) => {
+             // Toggles inner sections of the Right Column
+             document.getElementById('section-manual-form').classList.toggle('hidden', tab !== 'add');
+             document.getElementById('section-menu-config').classList.toggle('hidden', tab !== 'menu');
+             
+             // Update Desktop Buttons
+             document.getElementById('d-tab-add').className = (tab === 'add') ? "flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all bg-[#E2CB9F] text-[#432818] shadow-md" : "flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all opacity-50 hover:bg-[#E2CB9F]/50";
+             document.getElementById('d-tab-menu').className = (tab === 'menu') ? "flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all bg-[#E2CB9F] text-[#432818] shadow-md" : "flex-1 py-2 rounded-xl text-xs font-black uppercase transition-all opacity-50 hover:bg-[#E2CB9F]/50";
+        }
+
+        function startOrderListener() {
+            const q = query(collection(db, "artifacts", appId, "public", "data", "orders"), orderBy("timestamp", "desc"));
+            onSnapshot(q, (snapshot) => {
+                document.getElementById('loading').style.display = 'none';
+                const users = {};
+
+                snapshot.docs.forEach(docSnap => {
+                    const data = docSnap.data();
+                    
+                    if (!data.manualEntry && data.status === 'pending') {
+                        return; // Skip pending website orders
+                    }
+                    
+                    const rawName = data.customerName || "Unknown";
+                    const userKey = rawName.trim().toLowerCase();
+                    const hasCaps = /[A-Z]/.test(rawName);
+
+                    if (!users[userKey]) {
+                        users[userKey] = { displayName: rawName, totalOwed: 0, orders: [], lastOrderTime: 0 };
+                    } else if (hasCaps) {
+                        users[userKey].displayName = rawName;
+                    }
+
+                    let orderTotal = 0;
+                    let summary = "";
+
+                    if (data.items && Array.isArray(data.items)) {
+                        data.items.forEach(item => {
+                            orderTotal += (item.price * item.qty);
+                            summary += `${item.qty}x ${item.name} `;
+                        });
+                    } else if (data.item) {
+                        orderTotal = data.price || 0;
+                        summary = data.item;
+                    } else {
+                        orderTotal = data.total || 0;
+                        summary = "Order #" + docSnap.id.slice(-4);
+                    }
+
+                    const isPaid = data.paid === true;
+                    if (!isPaid) users[userKey].totalOwed += orderTotal;
+
+                    // Track latest timestamp for sorting
+                    const time = data.timestamp ? data.timestamp.seconds : 0;
+                    if (time > users[userKey].lastOrderTime) users[userKey].lastOrderTime = time;
+
+                    users[userKey].orders.push({
+                        id: docSnap.id, summary, total: orderTotal, paid: isPaid,
+                        timestamp: data.timestamp
+                    });
+                });
+                
+                currentUserData = users;
+                renderDebts(users);
+                
+                if(currentDetailUserKey) {
+                    if(users[currentDetailUserKey]) {
+                        renderUserDetails(currentDetailUserKey, users[currentDetailUserKey]);
+                    } else {
+                        closeUserDetails(); 
+                    }
+                }
+            });
+        }
+
+        function renderDebts(users) {
+            const container = document.getElementById('usersList');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            container.innerHTML = '';
+            
+            const allKeys = Object.keys(users);
+            
+            // --- NEW SORTING LOGIC ---
+            // 1. Filter first
+            const filteredKeys = allKeys.filter(key => key.includes(searchTerm));
+
+            // 2. Sort: Unpaid (Newest First) -> Paid (Bottom)
+            filteredKeys.sort((a, b) => {
+                const uA = users[a];
+                const uB = users[b];
+                
+                const aOwes = uA.totalOwed > 0;
+                const bOwes = uB.totalOwed > 0;
+
+                // Priority 1: Unpaid > Paid
+                if (aOwes && !bOwes) return -1;
+                if (!aOwes && bOwes) return 1;
+
+                // Priority 2: Latest Order Time (Newest First)
+                return uB.lastOrderTime - uA.lastOrderTime;
+            });
+
+            if (filteredKeys.length === 0) {
+                container.innerHTML = `<div class="col-span-2 text-center opacity-50 font-bold">No match found.</div>`;
+                return;
+            }
+
+            filteredKeys.forEach(key => {
+                const user = users[key];
+                const owesMoney = user.totalOwed > 0;
+                
+                container.innerHTML += `
+                    <div class="relative bg-white rounded-[1.5rem] p-4 flex flex-col justify-between h-32 shadow-md border-2 ${owesMoney ? 'border-[#432818]/5' : 'border-green-500/20'} active:scale-95 transition-transform">
+                        <div onclick="openUserDetails('${key}')" class="flex-1 flex flex-col justify-between cursor-pointer">
+                            <div>
+                                <h3 class="font-black text-[#432818] text-lg leading-tight truncate capitalize">${user.displayName}</h3>
+                                <p class="text-[10px] font-bold uppercase opacity-40 mt-1">${owesMoney ? user.orders.filter(o=>!o.paid).length + ' Items' : 'Settled'}</p>
+                            </div>
+                            <div class="text-2xl font-black tracking-tight ${owesMoney ? 'text-[#432818]' : 'text-green-600'}">
+                                ${owesMoney ? `$${user.totalOwed.toFixed(2)}` : '<i data-lucide="check-circle-2" class="w-7 h-7"></i>'}
+                            </div>
+                        </div>
+                        <button onclick="openQuickAdd('${key}')" class="absolute bottom-3 right-3 w-9 h-9 bg-[#432818] text-[#E2CB9F] rounded-full flex items-center justify-center shadow-lg hover:bg-black active:scale-90 transition-all z-10">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        window.filterUsers = () => {
+            renderDebts(currentUserData);
+        };
+
+        window.openUserDetails = (key) => {
+            currentDetailUserKey = key;
+            const userData = currentUserData[key];
+            if(userData) {
+                renderUserDetails(key, userData);
+                document.getElementById('userDetailsModal').classList.remove('hidden');
+            }
+        };
+
+        window.closeUserDetails = () => {
+            document.getElementById('userDetailsModal').classList.add('hidden');
+            currentDetailUserKey = null;
+        };
+
+        function renderUserDetails(key, user) {
+            document.getElementById('detailName').innerText = user.displayName;
+            const isPaid = user.totalOwed <= 0;
+            document.getElementById('detailTotal').innerHTML = isPaid ? '<span class="text-green-700 font-bold">All Paid</span>' : `$${user.totalOwed.toFixed(2)} Due`;
+            
+            const list = document.getElementById('detailList');
+            
+            // Sort details: Unpaid first, then Paid
+            const sortedOrders = [...user.orders].sort((a,b) => (a.paid === b.paid) ? 0 : a.paid ? 1 : -1);
+
+            list.innerHTML = sortedOrders.map(o => {
+                if (pendingDeletes[o.id]) {
+                    return `
+                    <div class="bg-[#432818] p-4 rounded-2xl flex justify-between items-center shadow-inner animate-in">
+                        <span class="text-[#E2CB9F] font-bold text-sm">Deleted.</span>
+                        <button onclick="undoDelete('${o.id}')" class="bg-[#E2CB9F] text-[#432818] px-4 py-1.5 rounded-lg text-xs font-black uppercase shadow-lg">Undo</button>
+                    </div>`;
+                }
+
+                return `
+                <div class="bg-white p-4 rounded-2xl flex items-center shadow-sm gap-3">
+                    
+                    <!-- DELETE BUTTON (Left Side) -->
+                    <div class="pr-2 border-r border-gray-100 flex-shrink-0">
+                        <button onclick="deleteOrder('${o.id}')" class="bg-gray-50 text-gray-300 hover:bg-red-50 hover:text-red-400 p-2 rounded-xl transition-colors">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- INFO (Middle) -->
+                    <div class="flex-1">
+                        <div class="font-bold text-[#432818] text-sm leading-tight">${o.summary}</div>
+                        <div class="text-[10px] opacity-50 font-black uppercase mt-0.5">
+                            ${o.timestamp ? new Date(o.timestamp.seconds * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Now'} • $${o.total.toFixed(2)}
+                        </div>
+                    </div>
+
+                    <!-- PAY / UNPAID (Right Side) -->
+                    <div class="flex-shrink-0">
+                        ${o.paid 
+                        ? `<button onclick="markUnpaid('${o.id}')" class="text-xs font-bold text-green-600 bg-green-100 px-3 py-2 rounded-xl hover:bg-green-200 active:scale-95 transition-all flex items-center gap-1 shadow-sm border border-green-200">PAID (Undo) <i data-lucide="rotate-ccw" class="w-3 h-3"></i></button>` 
+                        : `<button onclick="markPaid('${o.id}')" class="bg-green-500 text-white text-[10px] font-black uppercase px-4 py-2.5 rounded-xl shadow active:scale-95 transition-all">Pay</button>`}
+                    </div>
+
+                </div>
+            `}).join('');
+            lucide.createIcons();
+        }
+
+        window.openQuickAddFromDetails = () => {
+             const key = currentDetailUserKey;
+             closeUserDetails();
+             setTimeout(() => openQuickAdd(key), 100);
+        };
+
+        window.openQuickAdd = (key) => {
+            const user = currentUserData[key];
+            const displayName = user ? user.displayName : document.getElementById('manualName').value;
+            document.getElementById('quickAddName').innerText = displayName;
+            document.getElementById('quickAddName').dataset.key = key; 
+            document.getElementById('quickAddModal').classList.remove('hidden');
+        };
+
+        window.closeQuickAdd = () => {
+            document.getElementById('quickAddModal').classList.add('hidden');
+        };
+
+        window.markPaid = async (id) => {
+            await updateDoc(doc(db, "artifacts", appId, "public", "data", "orders", id), { paid: true });
+        };
+        
+        window.markUnpaid = async (id) => {
+            await updateDoc(doc(db, "artifacts", appId, "public", "data", "orders", id), { paid: false });
+        };
+
+        window.deleteOrder = (id) => {
+            const timeoutId = setTimeout(async () => {
+                await deleteDoc(doc(db, "artifacts", appId, "public", "data", "orders", id));
+                delete pendingDeletes[id];
+            }, 4000);
+            pendingDeletes[id] = timeoutId;
+            if (currentDetailUserKey && currentUserData[currentDetailUserKey]) {
+                renderUserDetails(currentDetailUserKey, currentUserData[currentDetailUserKey]);
+            }
+        };
+
+        window.undoDelete = (id) => {
+            clearTimeout(pendingDeletes[id]);
+            delete pendingDeletes[id];
+            if (currentDetailUserKey && currentUserData[currentDetailUserKey]) {
+                renderUserDetails(currentDetailUserKey, currentUserData[currentDetailUserKey]);
+            }
+        };
+
+        window.submitQuickAdd = async () => {
+            const displayName = document.getElementById('quickAddName').innerText;
+            const itemSelect = document.getElementById('quickItem');
+            const price = parseFloat(document.getElementById('quickPrice').value);
+            
+            if(!itemSelect.value || isNaN(price)) return;
+
+            const itemName = itemSelect.options[itemSelect.selectedIndex].text;
+            const size = document.getElementById('quickSize').value;
+
+            await addOrderToDb(displayName, itemName, price, size);
+            closeQuickAdd();
+            
+            const key = document.getElementById('quickAddName').dataset.key;
+            if(currentDetailUserKey === key) openUserDetails(key);
+        };
+
+        window.submitManualOrder = async () => {
+            const name = document.getElementById('manualName').value.trim();
+            const itemSelect = document.getElementById('manualItem');
+            const price = parseFloat(document.getElementById('manualPrice').value);
+            
+            if (!name || isNaN(price)) return alert("Name and Price required");
+            
+            const itemName = itemSelect.options[itemSelect.selectedIndex].text;
+            const size = document.getElementById('manualSize').value;
+
+            await addOrderToDb(name, itemName, price, size);
+            alert("Added!");
+            document.getElementById('manualName').value = '';
+            // Don't switch tab on Desktop mode
+            if(window.innerWidth < 768) switchTab('debts');
+        };
+
+        async function addOrderToDb(name, itemName, price, size) {
+             await addDoc(collection(db, "artifacts", appId, "public", "data", "orders"), {
+                customerName: name,
+                items: [{ name: itemName, qty: 1, price: price, size: size }],
+                total: price, status: "completed", paid: false, isDelivery: false,
+                timestamp: serverTimestamp(), manualEntry: true
+            });
+        }
+
+        window.setSize = (s, inputId, btnL, btnS) => {
+            document.getElementById(inputId).value = s;
+            const isL = s === 'Large';
+            
+            const lBtn = document.getElementById(btnL);
+            const sBtn = document.getElementById(btnS);
+            
+            if(lBtn) lBtn.className = isL ? "flex-1 py-2 rounded-xl text-xs font-black bg-[#432818] text-[#E2CB9F] shadow-sm transition-all" : "flex-1 py-2 rounded-xl text-xs font-black opacity-50 transition-all";
+            if(sBtn) sBtn.className = !isL ? "flex-1 py-2 rounded-xl text-xs font-black bg-[#432818] text-[#E2CB9F] shadow-sm transition-all" : "flex-1 py-2 rounded-xl text-xs font-black opacity-50 transition-all";
+            
+            const prefix = inputId.replace('Size', '');
+            updatePricePreview(`${prefix}Item`, `${prefix}Price`, `${prefix}SizeOptions`);
+        };
+
+        window.updatePricePreview = (selId, priceId, optsId) => {
+            const sel = document.getElementById(selId);
+            const opt = sel.options[sel.selectedIndex];
+            if (!opt.value) return;
+            
+            const type = opt.getAttribute('data-type');
+            const sizeInputId = selId.replace('Item', 'Size');
+            const size = document.getElementById(sizeInputId).value;
+            const price = getPrice(opt.value, size);
+            
+            const optsDiv = document.getElementById(optsId);
+            if(optsDiv) optsDiv.className = (type === 'drink') ? 'space-y-1 block animate-in' : 'hidden';
+            
+            const priceInput = document.getElementById(priceId);
+            if(priceInput) priceInput.value = price.toFixed(2);
+        };
+
+        function populateMenuDropdowns() {
+            ['manualItem', 'quickItem'].forEach(id => {
+                const sel = document.getElementById(id);
+                if(sel) {
+                    sel.innerHTML = '<option value="">-- Choose Item --</option>'; 
+                    MENU_ITEMS.forEach(i => {
+                        sel.innerHTML += `<option value="${i.id}" data-type="${i.type}">${i.name}</option>`;
+                    });
+                }
+            });
+            
+            const list = document.getElementById('menuReference');
+            if(list) {
+                list.innerHTML = '';
+                MENU_ITEMS.forEach(i => {
+                    const p1 = i.type === 'drink' ? getPrice(i.id, 'Small') : getPrice(i.id);
+                    const p2 = i.type === 'drink' ? ' / $' + getPrice(i.id, 'Large') : '';
+                    list.innerHTML += `<div class="flex justify-between border-b border-[#E2CB9F]/20 pb-2"><span>${i.name}</span><span>$${p1}${p2}</span></div>`;
+                });
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
+
